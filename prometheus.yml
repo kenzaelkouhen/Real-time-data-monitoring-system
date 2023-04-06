@@ -1,0 +1,10 @@
+
+#Configuration of prometheus to scrape metrics from the exporters 
+
+#cAdvisor exporter: Métricas de todos los servicios
+scrape_configs:
+- job_name: cadvisor
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - cadvisor:8083
