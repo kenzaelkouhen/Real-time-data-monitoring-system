@@ -1,0 +1,199 @@
+
+
+version: '3.2'
+
+
+services:
+
+# Grafana:
+  grafana:
+    image: grafana/grafana:7.0.6
+    environment:
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    ports:
+      - 3000:3000
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+
+
+ # Prometheus y exporters
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+    - 9090:9090
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+    - cadvisor
+
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+    - 8083:8083
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    depends_on:
+    - route_calculator
+    - osrm
+    - kafka
+    - kafka-ui
+    - mongo
+    - mongo-express
+    - simulator
+    - planSelectorUi
+    
+
+  # Route Calculator
+  route_calculator:
+    image: ghcr.io/jandion/logisticdeliversimulator/route_calculator:latest
+    ports:
+      - "7501:7501"
+
+
+  # OSRM
+  osrm:
+    image: ghcr.io/jandion/logisticdeliversimulator/osrm:latest 
+    ports:
+      - "5000:5000"
+
+
+  # Kafka
+  kafka:
+    image: bitnami/kafka:latest
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      ADV_HOST: kafka
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_LISTENERS: CLIENT://:9092,EXTERNAL://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
+    depends_on:
+      - zookeeper
+
+
+  # Zookeeper
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    ports:
+      - "2181:2181"
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+
+
+  # Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+
+  # MongoDB
+  mongo:
+    image: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+
+
+  # MongoDB Express
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+
+
+  # Simulator
+  simulator:
+    image: ghcr.io/jandion/logisticdeliversimulator/simulator:latest 
+    ports:
+      - "7500:7500"
+
+
+  # Plan Selector UI
+  planSelectorUi:
+    image: ghcr.io/jandion/logisticdeliversimulator/planselectorui:latest 
+    ports:
+      - "5003:5003"
+
+
+  # ElasticSearch
+  node01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.11.1
+    #stdin_open: true # docker run -i
+    #tty: true        # docker run -t
+    container_name: node01
+    environment:
+      - node.name=node01
+      - cluster.name=es-cluster-7
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms128m -Xmx128m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - es-network
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.11.1
+    environment:
+      ELASTICSEARCH_HOSTS: http://node01:9200
+    ports:
+      - 5601:5601
+    networks:
+      - es-network
+    depends_on:
+      - node01
+  
+  # Metricbeat
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:7.11.1
+    environment:
+      ELASTICSEARCH_HOSTS: http://node01:9200
+    volumes:
+      - metricbeat-data01:/usr/share/metricbeat/data
+    networks:
+      - es-network
+    depends_on:
+      - node01
+
+volumes:
+  es-data01:
+    driver: local
+  metricbeat-data01:
+    driver: local
+
+networks:
+  es-network:
+    driver: bridge
+
+
+ 
+ 
+
+  
+  
