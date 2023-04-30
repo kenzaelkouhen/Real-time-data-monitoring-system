@@ -1,19 +1,13 @@
 
 
-version: '3.2'
-# docker compose file
+ version: '3.7'
 
-services:
+ services:
 
-# Grafana:
   grafana:
     image: grafana/grafana:7.0.6
-    environment:
-      GF_INSTALL_PLUGINS: grafana-piechart-panel
     ports:
       - 3000:3000
-    volumes:
-      - ./grafana/provisioning/:/etc/grafana/provisioning/
     depends_on:
      - prometheus
      - cadvisor 
@@ -32,8 +26,8 @@ services:
 
     depends_on:
       - cadvisor
+   
 
-    
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
@@ -51,9 +45,11 @@ services:
       - /var/lib/docker:/var/lib/docker:ro
 
     privileged: true
+  
+ 
 
 
-
+  #Services to monitor
 
   # Route Calculator
   route_calculator:
@@ -191,7 +187,7 @@ services:
         gelf-address: "udp://host.docker.internal:12201"
 
 
- 
+  # ELK and Kibana
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.1.1
     environment: 
@@ -222,8 +218,8 @@ services:
 
 
  networks: 
-  logging-network:
-    driver: bridge
+   logging-network:
+     driver: bridge
  
 
   

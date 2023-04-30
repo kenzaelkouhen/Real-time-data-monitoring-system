@@ -1,21 +1,30 @@
 
-#Configuration of prometheus to scrape metrics from exporter
 
 
-# A scrape configuration containing exactly one endpoint to scrape (raspar):
+# Prometheus configuration
+
+global:
+  scrape_interval:     15s 
+  evaluation_interval: 15s 
+  
+
+
+# A scrape configuration containing exactly one endpoint to scrape:
 
 
 scrape_configs:
 
-- job_name: prometheus
+  - job_name: 'prometheus'
 
-  scrape_interval: 5s
+    static_configs:
+         - targets: ['localhost:9090']
 
-  static_configs:
+  - job_name: 'cadvisor'
 
-  - targets:
-    - prometheus:9090
-    - cadvisor:8080
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+ 
 
 
   
