@@ -1,5 +1,4 @@
 
-
  version: '3.7'
 
  services:
@@ -11,6 +10,7 @@
     depends_on:
      - prometheus
      - cadvisor 
+     - mongo_exporter
 
  # Prometheus and exporters
 
@@ -26,6 +26,10 @@
 
     depends_on:
       - cadvisor
+      - mongo_exporter
+    
+  
+    
    
 
   cadvisor:
@@ -45,8 +49,21 @@
       - /var/lib/docker:/var/lib/docker:ro
 
     privileged: true
-  
- 
+
+
+  mongo_exporter:
+    restart: 'always'
+    ports:
+    - '9001:9001'
+    image: gpuliyar/mongo-exporter
+    container_name: mongo-exporter-container
+    environment:
+    - 'MONGO_SERVICE=mongodb-service'
+    - 'MONGO_PORT=27017'
+    depends_on:
+    - mongo
+     
+    
 
 
   #Services to monitor
@@ -143,7 +160,9 @@
       driver: gelf
       options:
         gelf-address: "udp://host.docker.internal:12201"
-
+     
+       
+      
 
   # MongoDB Express
   mongo-express:
@@ -152,7 +171,7 @@
     ports:
       - "8081:8081"
     environment:
-      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      ME_CONFIG_MONGODB_URL: mongodb://host.docker.internal:27017/
     depends_on:
       - logstash
     logging:
