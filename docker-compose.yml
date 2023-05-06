@@ -1,5 +1,5 @@
 
- version: '3.7'
+ version: '3.2'
 
  services:
 
@@ -27,16 +27,15 @@
     depends_on:
       - cadvisor
       - mongo_exporter
-    
-  
-    
+    links:
+      - kafka
    
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
     ports:
-    - 8080:8080
+    - 8083:8080
 
     volumes:
 
@@ -94,49 +93,49 @@
         gelf-address: "udp://host.docker.internal:12201"
 
 
-  # Kafka
+    # Kafka
   kafka:
-    image: bitnami/kafka:latest
+    build: .
+    links:
+     - zookeeper
     ports:
       - "9092:9092"
-      - "9093:9093"
+      - "7071:7071"
     environment:
-      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
-      ALLOW_PLAINTEXT_LISTENER: "yes"
-      ADV_HOST: kafka
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_CFG_LISTENERS: CLIENT://:9092,EXTERNAL://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: CLIENT://kafka:9092,EXTERNAL://localhost:9093
-      KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_OPTS: -javaagent:/usr/app/jmx_prometheus_javaagent.jar=7071:/usr/app/prom-jmx-agent-config.yml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
-      - zookeeper
       - logstash
     logging:
       driver: gelf
       options:
         gelf-address: "udp://host.docker.internal:12201"
+
 
 
   # Zookeeper
   zookeeper:
-    image: bitnami/zookeeper:latest
+    image: wurstmeister/zookeeper
     ports:
       - "2181:2181"
-    environment:
-      ALLOW_ANONYMOUS_LOGIN: "yes"
     depends_on:
       - logstash
     logging:
       driver: gelf
       options:
         gelf-address: "udp://host.docker.internal:12201"
+
 
 
   # Kafka UI
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     ports:
-      - "8082:8082"
+      - "8080:8080"
     environment:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
@@ -146,6 +145,8 @@
       driver: gelf
       options:
         gelf-address: "udp://host.docker.internal:12201"
+
+
 
 
   # MongoDB
@@ -208,7 +209,9 @@
 
   # ELK and Kibana
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.1.1
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    ports: 
+      - 9200:9200
     environment: 
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -216,7 +219,7 @@
       - logging-network
 
   logstash:
-    image: docker.elastic.co/logstash/logstash:7.1.1
+    image: docker.elastic.co/logstash/logstash:8.7.1
     depends_on: 
       - elasticsearch
     ports:
@@ -227,13 +230,31 @@
       - logging-network
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:7.1.1
+    image: docker.elastic.co/kibana/kibana:8.7.1
     depends_on:
       - logstash
+      - metricbeat
     ports: 
       - 5601:5601
     networks: 
       - logging-network
+
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:8.7.1
+    depends_on: 
+      - elasticsearch
+    command:
+    - --config.file=/etc/metricbeat/metricbeat.yml
+    volumes:
+      - metricbeat-data01:/usr/share/metricbeat/data
+    networks:
+      - logging-network
+
+ volumes:
+  es-data01:
+    driver: local
+  metricbeat-data01:
+    driver: local
 
 
  networks: 

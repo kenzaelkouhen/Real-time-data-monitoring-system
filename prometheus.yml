@@ -8,7 +8,6 @@ global:
   evaluation_interval: 15s
   
 
-
 # A scrape configuration containing exactly one endpoint to scrape:
 
 
@@ -30,7 +29,12 @@ scrape_configs:
   
     static_configs:
          - targets: ['mongo_exporter:9001']
- 
+
+  - job_name: 'kafka'
+    static_configs:
+         - targets: ['kafka:7071']
+
+
 
 
   
