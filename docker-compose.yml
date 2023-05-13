@@ -249,12 +249,20 @@
     image: docker.elastic.co/beats/metricbeat:8.7.1
     depends_on: 
       - elasticsearch
-    command:
-    - --config.file=/etc/metricbeat/metricbeat.yml
+    configs:
+      - source: myconfig
+        target: /Users/kenzaelkouhen/monitoring/metricbeat.yml
+     
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - metricbeat-data01:/usr/share/metricbeat/data
     networks:
       - logging-network
+
+
+ configs:
+  myconfig:
+    file: ./metricbeat.yml
 
  volumes:
   es-data01:
