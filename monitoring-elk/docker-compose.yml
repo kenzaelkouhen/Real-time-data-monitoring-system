@@ -1,0 +1,239 @@
+
+
+#docker compose for elastic and Kibana -> cambia el Kafka, zookeeper y toda la parte del ELK
+# se dejan todos los otros contenedores para no tener que volver a instalarlos y para monitorizarlos
+
+
+version: '3.2'
+
+services:
+
+  grafana:
+    image: grafana/grafana:7.0.6
+    ports:
+      - 3000:3000
+    depends_on:
+     - prometheus
+     - cadvisor 
+     - mongo_exporter
+
+ # Prometheus and exporters
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+    - 9090:9090
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+    depends_on:
+      - cadvisor
+      - mongo_exporter
+    links:
+      - kafka
+   
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+    - 8083:8080
+
+    volumes:
+
+      - /:/rootfs:ro
+
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+      - /sys:/sys:ro
+
+      - /var/lib/docker:/var/lib/docker:ro
+
+    privileged: true
+
+
+  mongo_exporter:
+    restart: 'always'
+    ports:
+    - '9001:9001'
+    image: gpuliyar/mongo-exporter
+    container_name: mongo-exporter-container
+    environment:
+    - 'MONGO_SERVICE=mongodb-service'
+    - 'MONGO_PORT=27017'
+    depends_on:
+    - mongo
+     
+    
+
+
+  #Services to monitor
+
+  # Route Calculator
+  route_calculator:
+    image: ghcr.io/jandion/logisticdeliversimulator/route_calculator:latest
+    ports:
+      - "7501:7501"
+
+
+  # OSRM
+  osrm:
+    image: ghcr.io/jandion/logisticdeliversimulator/osrm:latest 
+    ports:
+      - "5000:5000"
+
+
+
+    # Kafka
+  kafka:
+    build: .
+    image: kafka-jolokia
+    links:
+      - zookeeper
+    ports:
+      - 9092:9092
+      - 9093:9093
+      - 8778:8778
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      ADV_HOST: kafka
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: CLIENT://:9092,EXTERNAL://:9093
+      KAFKA_ADVERTISED_LISTENERS: CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
+      KAFKA_OPTS: -javaagent:/usr/app/jolokia-jvm.jar=port=8778,host=0.0.0.0
+    volumes:
+      - ./volume/kafka/:/var/run/docker.sock
+
+
+  # Zookeeper
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - 2181:2181
+    volumes:
+      - ./volume/zookeeper/:/var/run/docker.sock
+    
+
+
+
+  # Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+   
+
+
+
+
+  # MongoDB
+  mongo:
+    image: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    
+     
+       
+      
+
+  # MongoDB Express
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://host.docker.internal:27017/
+   
+
+
+  # Simulator
+  simulator:
+    image: ghcr.io/jandion/logisticdeliversimulator/simulator:latest 
+    ports:
+      - "7500:7500"
+   
+
+
+  # Plan Selector UI
+  planSelectorUi:
+    image: ghcr.io/jandion/logisticdeliversimulator/planselectorui:latest 
+    ports:
+      - "5003:5003"
+  
+
+
+  # ELK and Kibana
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment: 
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+  #configs:
+#- source: myconfig1
+      #  target: /Users/kenzaelkouhen/monitoring/elasticsearch.yml
+    volumes:
+      - ./esdata01/:/usr/share/elasticsearch/data
+      - ./elasticsearch.yml:/usr/local/share/elasticsearch.yml:ro,Z
+    networks: 
+      - logging-network
+    links:
+      - kafka
+    
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.7.1
+    ports:
+      - 5601:5601
+    networks: 
+      - logging-network
+
+     
+
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:8.7.1
+    configs:
+      - source: myconfig
+        target: /Users/kenzaelkouhen/monitoring/metricbeat.docker.yml
+     
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - metricbeat-data01:/usr/share/metricbeat/data
+    networks:
+      - logging-network
+  
+
+
+configs:
+  myconfig:
+    file: ./metricbeat.docker.yml
+#myconfig1:
+   # file: ./elasticsearch.yml
+  
+
+volumes:
+  esdata01:
+    driver: local
+  metricbeat-data01:
+    driver: local
+
+
+networks: 
+   logging-network:
+     driver: bridge
+ 
+ 
+  
+  
