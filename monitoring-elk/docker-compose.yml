@@ -8,68 +8,7 @@ version: '3.2'
 
 services:
 
-  grafana:
-    image: grafana/grafana:7.0.6
-    ports:
-      - 3000:3000
-    depends_on:
-     - prometheus
-     - cadvisor 
-     - mongo_exporter
-
- # Prometheus and exporters
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-    - 9090:9090
-    command:
-    - --config.file=/etc/prometheus/prometheus.yml
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-
-    depends_on:
-      - cadvisor
-      - mongo_exporter
-    links:
-      - kafka
-   
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
-    container_name: cadvisor
-    ports:
-    - 8083:8080
-
-    volumes:
-
-      - /:/rootfs:ro
-
-      - /var/run/docker.sock:/var/run/docker.sock:rw
-
-      - /sys:/sys:ro
-
-      - /var/lib/docker:/var/lib/docker:ro
-
-    privileged: true
-
-
-  mongo_exporter:
-    restart: 'always'
-    ports:
-    - '9001:9001'
-    image: gpuliyar/mongo-exporter
-    container_name: mongo-exporter-container
-    environment:
-    - 'MONGO_SERVICE=mongodb-service'
-    - 'MONGO_PORT=27017'
-    depends_on:
-    - mongo
      
-    
-
-
   #Services to monitor
 
   # Route Calculator
@@ -86,40 +25,33 @@ services:
       - "5000:5000"
 
 
-
-    # Kafka
+  # Kafka
   kafka:
-    build: .
-    image: kafka-jolokia
-    links:
-      - zookeeper
+    image: bitnami/kafka:latest
     ports:
-      - 9092:9092
-      - 9093:9093
-      - 8778:8778
+      - "9092:9092"
+      - "9093:9093"
     environment:
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
       ALLOW_PLAINTEXT_LISTENER: "yes"
       ADV_HOST: kafka
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_LISTENERS: CLIENT://:9092,EXTERNAL://:9093
-      KAFKA_ADVERTISED_LISTENERS: CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_LISTENERS: CLIENT://:9092,EXTERNAL://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: CLIENT://kafka:9092,EXTERNAL://localhost:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: CLIENT
-      KAFKA_OPTS: -javaagent:/usr/app/jolokia-jvm.jar=port=8778,host=0.0.0.0
-    volumes:
-      - ./volume/kafka/:/var/run/docker.sock
+      KAFKA_ENABLE_KRAFT: no.
+    depends_on:
+      - zookeeper
+      
 
 
   # Zookeeper
   zookeeper:
-    image: wurstmeister/zookeeper
+    image: bitnami/zookeeper:latest
     ports:
-      - 2181:2181
-    volumes:
-      - ./volume/zookeeper/:/var/run/docker.sock
-    
-
-
+      - "2181:2181"
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
 
   # Kafka UI
   kafka-ui:
@@ -129,7 +61,6 @@ services:
     environment:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
-   
 
 
 
@@ -182,15 +113,12 @@ services:
     environment: 
       - discovery.type=single-node
       - xpack.security.enabled=false
-  #configs:
-#- source: myconfig1
-      #  target: /Users/kenzaelkouhen/monitoring/elasticsearch.yml
     volumes:
       - ./esdata01/:/usr/share/elasticsearch/data
       - ./elasticsearch.yml:/usr/local/share/elasticsearch.yml:ro,Z
     networks: 
       - logging-network
-    links:
+    depends_on:
       - kafka
     
   kibana:
@@ -201,26 +129,6 @@ services:
       - logging-network
 
      
-
-  metricbeat:
-    image: docker.elastic.co/beats/metricbeat:8.7.1
-    configs:
-      - source: myconfig
-        target: /Users/kenzaelkouhen/monitoring/metricbeat.docker.yml
-     
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - metricbeat-data01:/usr/share/metricbeat/data
-    networks:
-      - logging-network
-  
-
-
-configs:
-  myconfig:
-    file: ./metricbeat.docker.yml
-#myconfig1:
-   # file: ./elasticsearch.yml
   
 
 volumes:
