@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+          integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+          crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js" integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA==" crossorigin=""></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      #map {
+        height: 800px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <button id="submit-button">Submit</button>
+    <div id="jsons" style="border: 1em; border-color: black;">
+      <div id="dataSent" style="border: 1em; height: 200px; border-color: black;"></div>
+      <button id="copy-button" onclick="copyToClipboard('result')">Copy response</button>
+      <div id="result" style="border: 1em; height: auto; border-color: black;"></div>
+    </div>
+    <script>
+      function copyToClipboard(elementId) {
+        // Get the content of the div
+        var content = document.querySelector('#' + elementId).innerText;
+      
+        // Create a temporary element to hold the content
+        var tempInput = document.createElement("textarea");
+        tempInput.style = "position: absolute; left: -1000px; top: -1000px";
+        tempInput.value = content;
+        document.body.appendChild(tempInput);
+      
+        // Select and copy the content
+        tempInput.select();
+        document.execCommand("copy");
+      
+        // Remove the temporary element
+        document.body.removeChild(tempInput);
+      
+      }
+      </script>
+    <script type="text/javascript">
+      // add a black border to the divs
+      $("#dataSent").css("border", "1px solid black");
+      $("#result").css("border", "1px solid black");
+
+      //make div height equal to 70% of the window height
+      var height = $(window).height() * 0.7;
+      $("#map").css("height", height);
+      // Create a map object with the starting coordinates and zoom level
+      var map = L.map('map').setView([40.4168, -3.7038], 13);
+
+      // Add a base layer to the map
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
+        maxZoom: 18
+      }).addTo(map);
+
+      // Loop through the markers data passed from the Flask server
+      var markers = {{ markers|tojson|safe }};
+      // parse stringformat to json
+      markers = JSON.parse(markers);
+
+      // select only 10% random
+      markers = markers.sort(() => Math.random() - 0.5);
+      markers = markers.slice(0, markers.length * 0.1);
+
+      var mapMarkers = [];
+      for (var i = 0; i < markers.length; i++) {
+        var marker = markers[i];
+        var count = marker.count || 0;
+
+      // Add a marker to the map with the given coordinates and count
+      var marker = L.circleMarker([marker.coordinates.latitude, marker.coordinates.longitude], {
+        color: 'red',
+        fillColor: '#f03',
+        fillOpacity: 0.5,
+        radius: 10
+      }).addTo(map);
+        marker.locationId = markers[i]["_id"]["$oid"];
+
+      // Create a div element with the count and add it to the marker
+
+      var countDiv = document.createElement("div");
+      countDiv.innerHTML = count;
+      countDiv.style.color = "black";
+      countDiv.style.textAlign = "center";
+      countDiv.style.fontWeight = "bold";
+      countDiv.style.fontSize = "20px";
+      countDiv.style.width = "30px";
+      countDiv.style.height = "30px";
+      countDiv.innerText = count;
+
+      marker.bindPopup(countDiv);
+
+      marker.count = count;
+
+      // Increase the click counter for the marker when it's clicked
+      marker.on("click", function() {
+        this.count += 1;
+        //change color to green
+        this.setStyle({
+          color: 'green',
+          fillColor: '#0f3',
+          fillOpacity: 0.5,
+          radius: 10,
+        });
+        //add text to the marker
+
+        countDiv.innerHTML = this.count;
+
+        //update marker.bindPopup
+        this.bindPopup(countDiv);
+      });
+
+      // reset count on right click
+      marker.on("contextmenu", function() {
+        this.count = 0;
+        //change color to red
+        this.setStyle({
+          color: 'red',
+          fillColor: '#f03',
+          fillOpacity: 0.5,
+          radius: 10,
+        });
+        //add text to the marker
+        countDiv.innerHTML = this.count;
+
+        //update marker.bindPopup
+        this.bindPopup(countDiv);
+      });
+      mapMarkers.push(marker);
+    }
+
+      // Submit the clicked markers and their counts when the button is clicked
+      $("#submit-button").click( function() {
+        var data = [];
+        var k = 1;
+        for (var i = 0; i < mapMarkers.length; i++) {
+          var marker = mapMarkers[i];
+          for (var j = 0; j < marker.count; j++) {
+            data.push({
+              locationId: marker.locationId,
+              itemId: ""+k
+            });
+            k++;
+          }
+        }
+        $("#dataSent").html(JSON.stringify(data));
+        console.log(data);
+
+
+        $.ajax({
+          type: "POST",
+          url: "createPlan",
+          data: JSON.stringify(data),
+          contentType: "application/json",
+          success: function(response) {
+            console.log("Data submitted successfully");
+            console.log(response);
+
+            $("#result").html(JSON.stringify(response));
+
+            
+          },
+          error: function(error) {
+            console.log("Error submitting data");
+            console.log(error);
+            console.log(error.data);
+          }
+        });
+      });
+
+
+    </script>
+  </body>
+</html>
